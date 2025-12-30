@@ -1,0 +1,8 @@
+- [-] Create as Library
+- [ ] Create REPL?
+- [-] edge detection
+    - [ ] fix top missing
+    - [ ] fix some of bottom missing
+- [ ] PNG and JPG export/import?
+- [ ] Better `ende` configuration
+    - [ ] quicksort more scalable/better snapshots
