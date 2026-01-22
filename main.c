@@ -1,19 +1,24 @@
+#define INIT_COLOR 255
 #include "src/lib.c"
+
+uint8_t invert(uint8_t f, uint8_t s) { return 255 - f; }
+
+#define NEW(NAME, FUNC, ...)                                                   \
+  Image NAME = FUNC(__VA_ARGS__);                                              \
+  img        = &NAME;
+
 int main(void) {
   printf("[+] Started %ld\n", time(NULL));
-  Image img = import("in.ppm");
-  //Image buf = sobelOperator(&img);
-  //quicksort(&img);
-
-  char *text = "All human beings are born free and equal in dignity and "
-               "rights. They are endowed with reason and conscience and should "
-               "act towards one another in a spirit of brotherhood.";
-  stenography_put(&img, 4, (uint8_t*)text, strlen((const char*)text));
-  uint8_t* rtxt = stenography_get(&img, 4);
-  printf("msg> '%s'\n", rtxt);
+  Image *img = NULL;
+  NEW(new, init, 256, 256, 255);
+  // NEW(orig, import, "in.ppm");
+  // NEW(so, sobelOperator, &orig);
+  // NEW(gb, gaussianBlur, &orig);
+  // quicksort(&img);
 
   ende = 1;
-  snapshot(&img);
+  snapshot(img);
+  printf("[+] Ended %ld\n", time(NULL));
 }
 
 // vim: shiftwidth=2 tabstop=2 expandtab

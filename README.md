@@ -3,8 +3,12 @@
 </div>
 
 <p align="center">
-<img src="/img/cat.jpg" />
+<img src="https://septembersend.github.io/img/sortcat/cat.jpg" />
 </p>
+
+> [!WARNING]
+> Currently does not free any memory used!
+> Proceed at your own risk!
 
 ## Compiling
 
@@ -80,8 +84,8 @@ Can move `ende = 1` to above `quicksort()` to get a series of images of it
 going through the sorting process.
 
 <p align="center">
-    <img src="/img/cyber.jpg" />
-    <img src="/img/cybersorted.jpg" />
+    <img src="https://septembersend.github.io/img/sortcat/cyber.jpg" />
+    <img src="https://septembersend.github.io/img/sortcat/cybersorted.jpg" />
 </p>
 
 
@@ -101,7 +105,7 @@ Can move `ende = 1` to above `sobelOperator()` to get a series of images of it
 going through line by line.
 
 <p align="center">
-    <img src="/img/cybersobel.jpg" />
+    <img src="https://septembersend.github.io/img/sortcat/cybersobel.jpg" />
 </p>
 
 
@@ -111,7 +115,7 @@ Because the first thing I did with this project, is sort the pixels in an image
 of a cat.
 
 <p align="center">
-    <img src="/img/cat.jpg" />
-    <img src="/img/catsorted.jpg" />
+    <img src="https://septembersend.github.io/img/sortcat/cat.jpg" />
+    <img src="https://septembersend.github.io/img/sortcat/catsorted.jpg" />
 </p>
 

@@ -9,7 +9,9 @@
 #include <unistd.h>
 
 /* Image Type Manipulation {{{ */
+#ifndef INIT_COLOR
 #define INIT_COLOR 255
+#endif
 typedef struct {
   size_t width;
   size_t height;
@@ -49,34 +51,6 @@ Image init(unsigned int w, unsigned int h, unsigned int d) {
   memset(img.blue, INIT_COLOR, size);
 
   return img;
-}
-
-/**
- * context: These two images must be the same size
- */
-void copyImg_f(Image* dst, Image* src, uint8_t (*f)(uint8_t, uint8_t)) {
-	assert(dst->width == src->width);
-	assert(dst->height == src->height);
-	assert(dst->size == src->size);
-
-	for (int x=0; x<dst->size; x++) {
-		dst->red[x]		=    f(dst->red[x],    src->red[x]);
-		dst->green[x]	=  f(dst->green[x],  src->green[x]);
-		dst->blue[x]	=   f(dst->blue[x],   src->blue[x]);
-	}
-}
-
-/**
- * context: These two images must be the same size
- */
-void copyImg(Image* dst, Image* src) {
-	assert(dst->width == src->width);
-	assert(dst->height == src->height);
-	assert(dst->size == src->size);
-
-	memcpy(dst->red, src->red, dst->size);
-	memcpy(dst->green, src->green, dst->size);
-	memcpy(dst->blue, src->blue, dst->size);
 }
 /* }}} */
 
@@ -242,7 +216,55 @@ unsigned int stenography_putSizeImg(Image* img, unsigned int strip) {
 /* }}} */
 /* }}} */
 
-/* Manipulation {{{ */
+
+/* Operations {{{ */
+/**
+ * Operations - Functions that manipulate the Image type
+ *
+ * Operations are functions that are used to create, destroy, modify, copy,
+ * etc. the `Image` type. They do not modify the pixels, unless the process
+ * requires it, or allows it.
+ */
+
+/* Copy {{{ */
+/**
+ * context: These two images must be the same size
+ */
+void copyImg_f(Image* dst, Image* src, uint8_t (*f)(uint8_t, uint8_t)) {
+	assert(dst->width == src->width);
+	assert(dst->height == src->height);
+	assert(dst->size == src->size);
+
+	for (int x=0; x<dst->size; x++) {
+		dst->red[x]		=    f(dst->red[x],    src->red[x]);
+		dst->green[x]	=  f(dst->green[x],  src->green[x]);
+		dst->blue[x]	=   f(dst->blue[x],   src->blue[x]);
+	}
+}
+
+/**
+ * context: These two images must be the same size
+ */
+void copyImg(Image* dst, Image* src) {
+	assert(dst->width == src->width);
+	assert(dst->height == src->height);
+	assert(dst->size == src->size);
+
+	memcpy(dst->red, src->red, dst->size);
+	memcpy(dst->green, src->green, dst->size);
+	memcpy(dst->blue, src->blue, dst->size);
+}
+/* }}} */
+/* }}} */
+
+/* Manipulations {{{ */
+/**
+ * Manipulations - Manipulate the Image type pixels directly
+ *
+ * Manipulations modify the data of the image directly, and do not touch
+ * other aspecs of an image.
+ */
+
 /* Create Gradient {{{ */
 void createGradientTD(Image* i, int a) {
   float ga = ((float)i->depth / (float)i->width) * a;
@@ -385,6 +407,7 @@ uint8_t f_max(uint8_t dst, uint8_t src) {
   return dst;
 }
 
+// TODO:
 Image sobelOperator(Image* src) {
   Image buf = init(src->width, src->height, src->depth);
   copyImg(&buf, src);
@@ -425,7 +448,7 @@ Image sobelOperator(Image* src) {
   return buf;
 }
 /* }}} */
-/* TODO: stenography {{{ */
+/* TODO: Stenography {{{ */
 void sten_strip(Image* img, unsigned int len) {
   // Move 1 len distance, sub one to get all 1's.
   // If len == 0, then strip = 0.
@@ -450,17 +473,32 @@ void stenography_put(Image* img, unsigned int strip, uint8_t* data, size_t dlen)
   int ii = 0;
   for (int x=0; x<dlen && ii<img->size; x++) {
     uint8_t hold = data[x];
+    // TODO: fix, can get stuck between each section.
+    // making blue missout
     for (int y=0; y<8;) {
       uint8_t b = hold & smask;
       img->red[ii] &= ~smask;
-      img->red[ii++] |= b;
+      img->red[ii] |= b;
       hold >>= strip;
       y += strip;
+
+      b = hold & smask;
+      img->green[ii] &= ~smask;
+      img->green[ii] |= b;
+      hold >>= strip;
+      y += strip;
+
+      b = hold & smask;
+      img->blue[ii] &= ~smask;
+      img->blue[ii] |= b;
+      hold >>= strip;
+      y += strip;
+      ii++;
     }
   }
 }
 uint8_t *stenography_get(Image *img, int strip) {
-  assert(strip < 8);
+  assert(strip <= 8);
   assert(strip % 2 == 0); // is even
 
   const size_t smask = (1U << strip) - 1U;
@@ -474,9 +512,18 @@ uint8_t *stenography_get(Image *img, int strip) {
   for (; ii<img->size;) {
     uint8_t h = 0;
     for (int x=0; x<8;) {
-      uint8_t a = img->red[ii++] & smask;
+      uint8_t a = img->red[ii] & smask;
       h += a << x;
       x += strip;
+
+      a = img->green[ii] & smask;
+      h += a << x;
+      x += strip;
+
+      a = img->blue[ii] & smask;
+      h += a << x;
+      x += strip;
+      ii++;
     }
     if (isprint(h)) {
       assert(len < tmplen-1); // TODO: add resize buffer
@@ -488,6 +535,51 @@ uint8_t *stenography_get(Image *img, int strip) {
   }
 
   return NULL;
+}
+/* }}} */
+/* TODO: Gausian Blur {{{ */
+// TODO: Custom kernels.
+// TODO: Fix edge detection.
+uint8_t _gaussianBlur(int index, uint8_t* arr, Image const* img) {
+  const int w = img->width;
+  const int nav[5][5] = {
+    {-((w*2)-2), -((w*2)-1), -((w*2)), -((w*2)+1), -((w*2)+2)},
+    {-(w-2), -(w-1), -(w), -(w+1), -(w+2)},
+    {-2, -1, 0, 1, 2},
+    {w-2, w-1, w, w+1, w+2},
+    {(w*2)-2, (w*2)-1, (w*2), (w*2)+1, (w*2)+2},
+  };
+  const uint8_t k[5][5] = {
+    {1, 4, 7, 4, 1},
+    {4, 16, 26, 16, 4},
+    {7, 26, 41, 26, 7},
+    {4, 16, 26, 16, 4},
+    {1, 4, 7, 4, 1},
+  };
+  int r2 = 0;
+  for (int x=0; x<5; x++) {
+    for (int y=0; y<5; y++) {
+      r2 += k[x][y] * arr[index-nav[x][y]];
+    }
+  }
+
+  return r2/(277);
+}
+Image gaussianBlur(Image* src) {
+  Image buf = init(src->width, src->height, src->depth);
+  copyImg(&buf, src);
+  //return buf;
+  for (int x = src->width + 1; x < src->size - src->width - 1; x++) {
+
+    buf.red[x]    =  _gaussianBlur(x, src->red,   src);
+    buf.green[x]  =  _gaussianBlur(x, src->green, src);
+    buf.blue[x]   =  _gaussianBlur(x, src->blue,  src);
+
+    if (x%(src->width) == 0) {
+      snapshot(&buf);
+    }
+  }
+  return buf;
 }
 /* }}} */
 /* }}} */
