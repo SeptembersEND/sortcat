@@ -1,20 +1,24 @@
-#define INIT_COLOR 255
-#include "src/lib.c"
+#include <stdio.h>
+#include <time.h>
+#include <stddef.h>
 
-uint8_t invert(uint8_t f, uint8_t s) { return 255 - f; }
+#define INIT_COLOR ~0
 
-#define NEW(NAME, FUNC, ...)                                                   \
-  Image NAME = FUNC(__VA_ARGS__);                                              \
-  img        = &NAME;
+#include "src/lib.h"
+#include "src/3d.h"
+
 
 int main(void) {
   printf("[+] Started %ld\n", time(NULL));
   Image *img = NULL;
-  NEW(new, init, 256, 256, 255);
+
   // NEW(orig, import, "in.ppm");
-  // NEW(so, sobelOperator, &orig);
+  NEW(new, init, 512, 512, 255);
+  // NEW(gb, sobelOperator, &orig);
   // NEW(gb, gaussianBlur, &orig);
   // quicksort(&img);
+  // copyImg(img, &orig);
+
 
   ende = 1;
   snapshot(img);

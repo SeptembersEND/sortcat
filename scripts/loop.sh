@@ -1,3 +1,3 @@
 #!/bin/sh
 
-ls *.c */*.c | entr -s 'clear ; cc main.c -lm -o a.out && ./a.out'
+ls *.c */*.c | entr -s 'clear ; ./scripts/build.sh && ./a.out'

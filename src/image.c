@@ -1,26 +1,4 @@
-#include <assert.h>
-#include <ctype.h>
-#include <math.h>
-#include <stdint.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <time.h>
-#include <unistd.h>
-
 /* Image Type Manipulation {{{ */
-#ifndef INIT_COLOR
-#define INIT_COLOR 255
-#endif
-typedef struct {
-  size_t width;
-  size_t height;
-  size_t size;
-  size_t depth;
-  uint8_t *red;
-  uint8_t *green;
-  uint8_t *blue;
-} Image;
 int isallocated(Image* i) {
   if (i->red == NULL || i->green == NULL || i->blue == NULL || i->size == 0) {
     printf("image->red\t== '%p'\n", (void *)i->red);
@@ -55,8 +33,9 @@ Image init(unsigned int w, unsigned int h, unsigned int d) {
 /* }}} */
 
 /* Export {{{ */
-void export(FILE *fp, Image *image) {
+void export_p3(FILE* fp, Image *image) {
   assert(fp != NULL);
+  assert(image != NULL);
   assert(isallocated(image) == 0);
   fprintf(fp, "P3\n%ld %ld\n%ld\n", image->width, image->height, image->depth);
   for (int x = 0; x < image->size; x++) {
@@ -64,40 +43,42 @@ void export(FILE *fp, Image *image) {
   }
 }
 
+void export(FILE *fp, Image *image) {
+  assert(fp != NULL);
+  assert(image != NULL);
+  assert(isallocated(image) == 0);
+
+  // TODO: specify export type
+  export_p3(fp, image);
+}
+
 #define FILEOUT	"out/test"
-int ende = 0;
+unsigned int snapshot_options = 0b0;
+int ende                      = 0;
 void snapshot(Image* image) {
-  if (ende == 0)
+  if (ende <= 0)
     return;
+  assert(image != NULL);
 
   assert(isallocated(image) == 0);
   static unsigned int i = 0;
+  if ((snapshot_options & DN_INC) == 1)
+    i = 0;
+
   static char buf [128] = {0};
   snprintf(buf, 127, FILEOUT "%.5d.ppm", i++);
   FILE *fp = fopen(buf, "w");
   assert(fp != NULL);
 
-  printf("[+] Exporting %s -- %ld pixels\n", buf, image->size);
+  printf("[+] Exporting %s -- %ld*%ld %ld pixels\n", buf, image->width,
+         image->height, image->size);
   export(fp, image);
+  fclose(fp);
 }
 /* }}} */
 /* Import {{{ */
-/* Filters {{{ */
-uint8_t rtest(unsigned int x, unsigned int i) {
-  // return x+((x+i%(width/5))/0.2);
-  return x;
-}
-uint8_t gtest(unsigned int x, unsigned int i) { return 0; }
-uint8_t btest(unsigned int x, unsigned int i) { return 0; }
-
-uint8_t normal(unsigned int x, unsigned int) { return x; }
-uint8_t (*rfilter)(unsigned int, unsigned int) = normal; // rtest;
-uint8_t (*bfilter)(unsigned int, unsigned int) = normal; // btest;
-uint8_t (*gfilter)(unsigned int, unsigned int) = normal; // gtest;
-/* }}} */
-
-#define NEND ptr != end
-unsigned int importunum(uint8_t **ptr, uint8_t *end) {
+#define IF_NEND ptr != end
+unsigned int import_unum(uint8_t **ptr, uint8_t *end) {
   unsigned int out = 0;
   uint8_t *tptr = *ptr;
   while (isdigit(*tptr)) {
@@ -110,28 +91,33 @@ unsigned int importunum(uint8_t **ptr, uint8_t *end) {
   return out;
 }
 
-Image importp6(uint8_t *buffer, uint8_t *end) {
+uint8_t normal(unsigned int x, unsigned int) { return x; }
+uint8_t (*rfilter)(unsigned int, unsigned int) = normal; // rtest;
+uint8_t (*bfilter)(unsigned int, unsigned int) = normal; // btest;
+uint8_t (*gfilter)(unsigned int, unsigned int) = normal; // gtest;
+
+Image import_p6(uint8_t *buffer, uint8_t *end) {
   printf("[+]\tImporting as P6\n");
   uint8_t *ptr = buffer + 2; // for first P6
-  assert(*ptr == '\n' && NEND);
+  assert(*ptr == '\n' && IF_NEND);
   ptr++;
 
-  unsigned int w = importunum(&ptr, end);
-  fprintf(stderr, "[*] width: %d\n", w);
-  assert(w != 0 && NEND);
+  unsigned int w = import_unum(&ptr, end);
+  fprintf(stderr, "[*] width: %d, ", w);
+  assert(w != 0 && IF_NEND);
   assert(*ptr == ' ');
   ptr++;
 
-  unsigned int h = importunum(&ptr, end);
-  fprintf(stderr, "[*] height: %d\n", h);
-  assert(h != 0 && NEND);
+  unsigned int h = import_unum(&ptr, end);
+  fprintf(stderr, "height: %d, ", h);
+  assert(h != 0 && IF_NEND);
 
-  assert(*ptr == '\n' && NEND);
+  assert(*ptr == '\n' && IF_NEND);
   ptr++;
-  unsigned int mv = importunum(&ptr, end);
-  fprintf(stderr, "[*] maxval: %d\n", mv);
-  fprintf(stderr, "[*] size: %d\n", h*w);
-  assert(h != 0 && NEND);
+  unsigned int mv = import_unum(&ptr, end);
+  fprintf(stderr, "maxval: %d, ", mv);
+  fprintf(stderr, "size: %d\n", h*w);
+  assert(h != 0 && IF_NEND);
   assert(*ptr == '\n');
   ptr++;
 
@@ -144,21 +130,17 @@ Image importp6(uint8_t *buffer, uint8_t *end) {
 #define MOD_G(X) gfilter(MOD(X), i)
 #define MOD_B(X) bfilter(MOD(X), i)
 
-  // // Upsidedown
-  // int z=size*3,x=(size*3);
-  // while (NEND && i < size-1) {
-  //   img.red[i]    = ptr[x]; x--;
-  //   img.blue[i]   = ptr[x]; x--;
-  //   img.green[i]  = ptr[x]; x--;
-  //   i++;
-  // }
-
-  while (NEND && i < size) {
+  while (IF_NEND && i < size) {
     img.red   [i] = MOD_R(*ptr++);
     img.green [i] = MOD_G(*ptr++);
     img.blue  [i] = MOD_B(*ptr++);
     i++;
   }
+
+#undef MOD_B
+#undef MOD_G
+#undef MOD_R
+#undef MOD
 
   return img;
 }
@@ -179,43 +161,9 @@ Image import(const char *file) {
   // TODO: add P3
   assert(buffer[0] == 'P' && buffer[1] == '6');
 
-  return importp6(buffer, &(buffer[fsize]));
+  return import_p6(buffer, &(buffer[fsize]));
 }
 /* }}} */
-
-/* Tools {{{ */
-/* Stenography {{{ */
-/**
- * stenogrphy_putSize() - Returns the size in bytes, that an image can hold.
- * size:   The length of image used, (e.g. sum of Red, Green and Blue pixels)
- * strip:  The length, from least significant bit to most, used
- *
- * Takes the size of an image, and the strip length, and calculates the amount
- * available for stenography.
- *
- * context: This is for use in the stenography set.
- * return: capacity in bytes available for stenography in image.
- */
-unsigned int stenography_putSize(size_t size, unsigned int strip) {
-  return (size * strip)/8;
-}
-/**
- * stenography_putSizeImg() - Returns size in bytes an image can hold.
- * img:   Image to use in stenography
- * strip: The lengt, from least significant bit to most, used
- *
- * Take in an image, get the size, and uses the strip length, to calculate the
- * feasible total capacity of the image.
- *
- * context: This is for use in the stenography set.
- * return: capacity in bytes available for stenography in image.
- */
-unsigned int stenography_putSizeImg(Image* img, unsigned int strip) {
-  return stenography_putSize(img->size, strip);
-}
-/* }}} */
-/* }}} */
-
 
 /* Operations {{{ */
 /**
@@ -226,6 +174,45 @@ unsigned int stenography_putSizeImg(Image* img, unsigned int strip) {
  * requires it, or allows it.
  */
 
+/* Filter {{{ */
+/* Filter Functions {{{ */
+uint8_t invert(uint8_t f) { return 255 - f; }
+/* }}} */
+
+
+void filter(Image* img, uint8_t (*filter)(uint8_t)) {
+  for (size_t x = 0; x < img->size; x++) {
+    img->red[x]   = filter(img->red[x]);
+    img->green[x] = filter(img->green[x]);
+    img->blue[x]  = filter(img->blue[x]);
+  }
+}
+/* }}} */
+/* Scale {{{ */
+// TODO: add support scale down
+Image scale(Image* src, int r) {
+  assert(r >= 1 && "Scalling down is currently not supported");
+  Image buf = init(src->width*r, src->height*r, src->depth);
+
+  int bi = 0;
+  for (int x=0; x<src->height; x++) {
+    for (int z=0; z<r; z++) {
+      for (int y=0; y<src->width; y++) {
+        int rc = src->red[(x*src->width)+y];
+        int gc = src->green[(x*src->width)+y];
+        int bc = src->blue[(x*src->width)+y];
+        for (int z2=0; z2<r; z2++) {
+          buf.red[bi] = rc;
+          buf.green[bi] = gc;
+          buf.blue[bi]  = bc;
+          bi++;
+        }
+      }
+    }
+  }
+  return buf;
+}
+/* }}} */
 /* Copy {{{ */
 /**
  * context: These two images must be the same size
@@ -256,7 +243,6 @@ void copyImg(Image* dst, Image* src) {
 }
 /* }}} */
 /* }}} */
-
 /* Manipulations {{{ */
 /**
  * Manipulations - Manipulate the Image type pixels directly
@@ -265,6 +251,13 @@ void copyImg(Image* dst, Image* src) {
  * other aspecs of an image.
  */
 
+/* Fill {{{ */
+void fill(Image* src, color fill) {
+  memset(src->red, fill.r, src->size);
+  memset(src->green, fill.g, src->size);
+  memset(src->blue, fill.b, src->size);
+}
+/* }}} */
 /* Create Gradient {{{ */
 void createGradientTD(Image* i, int a) {
   float ga = ((float)i->depth / (float)i->width) * a;
@@ -292,6 +285,7 @@ void createGradientLR(Image* i, int a) {
   }
 }
 /* }}} */
+
 /* Bubble Sort {{{ */
 #define BSSWAP(A)                                                              \
   do {                                                                         \
@@ -379,6 +373,7 @@ void quicksort(Image* img) {
   qsort_img = NULL;
 }
 /* }}} */
+
 /* TODO: Sobel Operator {{{ */
 // TODO: move vvv to good location
 uint8_t add(uint8_t dst, uint8_t src) {
@@ -448,7 +443,82 @@ Image sobelOperator(Image* src) {
   return buf;
 }
 /* }}} */
+/* TODO: Gausian Blur {{{ */
+// TODO: Custom kernels.
+// TODO: Fix edge detection.
+uint8_t _gaussianBlur(int index, uint8_t* arr, Image const* img) {
+  const int w = img->width;
+  const int nav[5][5] = {
+    {-((w*2)-2), -((w*2)-1), -((w*2)), -((w*2)+1), -((w*2)+2)},
+    {-(w-2), -(w-1), -(w), -(w+1), -(w+2)},
+    {-2, -1, 0, 1, 2},
+    {w-2, w-1, w, w+1, w+2},
+    {(w*2)-2, (w*2)-1, (w*2), (w*2)+1, (w*2)+2},
+  };
+  const uint8_t k[5][5] = {
+    {1, 4, 7, 4, 1},
+    {4, 16, 26, 16, 4},
+    {7, 26, 41, 26, 7},
+    {4, 16, 26, 16, 4},
+    {1, 4, 7, 4, 1},
+  };
+  int r2 = 0;
+  for (int x=0; x<5; x++) {
+    for (int y=0; y<5; y++) {
+      r2 += k[x][y] * arr[index-nav[x][y]];
+    }
+  }
+
+  return r2/(277);
+}
+Image gaussianBlur(Image* src) {
+  Image buf = init(src->width, src->height, src->depth);
+  copyImg(&buf, src);
+
+  for (int x = src->width + 1; x < src->size - src->width - 1; x++) {
+
+    buf.red[x]    =  _gaussianBlur(x, src->red,   src);
+    buf.green[x]  =  _gaussianBlur(x, src->green, src);
+    buf.blue[x]   =  _gaussianBlur(x, src->blue,  src);
+
+    if (x%(src->width) == 0) {
+      snapshot(&buf);
+    }
+  }
+  return buf;
+}
+/* }}} */
 /* TODO: Stenography {{{ */
+/**
+ * stenogrphy_putSize() - Returns the size in bytes, that an image can hold.
+ * size:   The length of image used, (e.g. sum of Red, Green and Blue pixels)
+ * strip:  The length, from least significant bit to most, used
+ *
+ * Takes the size of an image, and the strip length, and calculates the amount
+ * available for stenography.
+ *
+ * context: This is for use in the stenography set.
+ * return: capacity in bytes available for stenography in image.
+ */
+unsigned int stenography_putSize(size_t size, unsigned int strip) {
+  return (size * strip)/8;
+}
+
+/**
+ * stenography_putSizeImg() - Returns size in bytes an image can hold.
+ * img:   Image to use in stenography
+ * strip: The lengt, from least significant bit to most, used
+ *
+ * Take in an image, get the size, and uses the strip length, to calculate the
+ * feasible total capacity of the image.
+ *
+ * context: This is for use in the stenography set.
+ * return: capacity in bytes available for stenography in image.
+ */
+unsigned int stenography_putSizeImg(Image* img, unsigned int strip) {
+  return stenography_putSize(img->size, strip);
+}
+
 void sten_strip(Image* img, unsigned int len) {
   // Move 1 len distance, sub one to get all 1's.
   // If len == 0, then strip = 0.
@@ -459,6 +529,7 @@ void sten_strip(Image* img, unsigned int len) {
     img->blue[x]   =  img->blue[x]   &  strip;
   }
 }
+
 void stenography_put(Image* img, unsigned int strip, uint8_t* data, size_t dlen) {
   assert(strip <= 8);
   size_t total = (img->size * strip)/8;
@@ -497,6 +568,7 @@ void stenography_put(Image* img, unsigned int strip, uint8_t* data, size_t dlen)
     }
   }
 }
+
 uint8_t *stenography_get(Image *img, int strip) {
   assert(strip <= 8);
   assert(strip % 2 == 0); // is even
@@ -535,51 +607,6 @@ uint8_t *stenography_get(Image *img, int strip) {
   }
 
   return NULL;
-}
-/* }}} */
-/* TODO: Gausian Blur {{{ */
-// TODO: Custom kernels.
-// TODO: Fix edge detection.
-uint8_t _gaussianBlur(int index, uint8_t* arr, Image const* img) {
-  const int w = img->width;
-  const int nav[5][5] = {
-    {-((w*2)-2), -((w*2)-1), -((w*2)), -((w*2)+1), -((w*2)+2)},
-    {-(w-2), -(w-1), -(w), -(w+1), -(w+2)},
-    {-2, -1, 0, 1, 2},
-    {w-2, w-1, w, w+1, w+2},
-    {(w*2)-2, (w*2)-1, (w*2), (w*2)+1, (w*2)+2},
-  };
-  const uint8_t k[5][5] = {
-    {1, 4, 7, 4, 1},
-    {4, 16, 26, 16, 4},
-    {7, 26, 41, 26, 7},
-    {4, 16, 26, 16, 4},
-    {1, 4, 7, 4, 1},
-  };
-  int r2 = 0;
-  for (int x=0; x<5; x++) {
-    for (int y=0; y<5; y++) {
-      r2 += k[x][y] * arr[index-nav[x][y]];
-    }
-  }
-
-  return r2/(277);
-}
-Image gaussianBlur(Image* src) {
-  Image buf = init(src->width, src->height, src->depth);
-  copyImg(&buf, src);
-  //return buf;
-  for (int x = src->width + 1; x < src->size - src->width - 1; x++) {
-
-    buf.red[x]    =  _gaussianBlur(x, src->red,   src);
-    buf.green[x]  =  _gaussianBlur(x, src->green, src);
-    buf.blue[x]   =  _gaussianBlur(x, src->blue,  src);
-
-    if (x%(src->width) == 0) {
-      snapshot(&buf);
-    }
-  }
-  return buf;
 }
 /* }}} */
 /* }}} */

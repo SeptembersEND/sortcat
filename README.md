@@ -109,6 +109,29 @@ going through line by line.
 </p>
 
 
+## 3D Rendering (`example/3d_image.c`)
+
+```C
+#include "../src/3d.h"
+#include "../src/lib.h"
+int main(void) {
+  Image img = init(512, 512, 256);
+  model obj = import_objF(model_file);
+  put_3dmodel(obj, img, NULL, NULL);
+  ende = 1;
+  snapshot(img);
+}
+```
+
+Can move `ende = 1` to above `put_3dmodel()` to get a series of images of it
+going through line by line.
+
+<p align="center">
+    <img src="https://septembersend.github.io/img/sortcat/cat.jpg" />
+    <img src="https://septembersend.github.io/img/sortcat/catsorted.jpg" />
+</p>
+
+
 ## Why Sort Cat?
 
 Because the first thing I did with this project, is sort the pixels in an image
@@ -118,4 +141,3 @@ of a cat.
     <img src="https://septembersend.github.io/img/sortcat/cat.jpg" />
     <img src="https://septembersend.github.io/img/sortcat/catsorted.jpg" />
 </p>
-
